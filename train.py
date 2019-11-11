@@ -12,18 +12,18 @@ from collections import defaultdict, deque
 from game import Board, Game
 from mcts_pure import MCTSPlayer as MCTS_Pure
 from mcts_alphaZero import MCTSPlayer
-from policy_value_net import PolicyValueNet  # Theano and Lasagne
+#from policy_value_net import PolicyValueNet  # Theano and Lasagne
 # from policy_value_net_pytorch import PolicyValueNet  # Pytorch
 # from policy_value_net_tensorflow import PolicyValueNet # Tensorflow
-# from policy_value_net_keras import PolicyValueNet # Keras
+from policy_value_net_keras import PolicyValueNet # Keras
 
 
 class TrainPipeline():
-    def __init__(self, init_model=None):
+    def __init__(self, init_model = None, last_iteration = None):
         # params of the board and the game
-        self.board_width = 6
-        self.board_height = 6
-        self.n_in_row = 4
+        self.board_width = 9
+        self.board_height = 9
+        self.n_in_row = 5
         self.board = Board(width=self.board_width,
                            height=self.board_height,
                            n_in_row=self.n_in_row)
@@ -40,21 +40,26 @@ class TrainPipeline():
         self.play_batch_size = 1
         self.epochs = 5  # num of train_steps for each update
         self.kl_targ = 0.02
-        self.check_freq = 50
+        self.check_freq = 200
         self.game_batch_num = 1500
-        self.best_win_ratio = 0.0
+        self.best_win_ratio = 0.95
         # num of simulations used for the pure mcts, which is used as
         # the opponent to evaluate the trained policy
-        self.pure_mcts_playout_num = 1000
+        self.pure_mcts_playout_num = 3500
         if init_model:
             # start training from an initial policy-value net
             self.policy_value_net = PolicyValueNet(self.board_width,
                                                    self.board_height,
                                                    model_file=init_model)
+            self.last_iteration = last_iteration
+
         else:
             # start training from a new policy-value net
             self.policy_value_net = PolicyValueNet(self.board_width,
                                                    self.board_height)
+                                                   
+            self.last_iteration = 0
+
         self.mcts_player = MCTSPlayer(self.policy_value_net.policy_value_fn,
                                       c_puct=self.c_puct,
                                       n_playout=self.n_playout,
@@ -155,6 +160,7 @@ class TrainPipeline():
                                           pure_mcts_player,
                                           start_player=i % 2,
                                           is_shown=0)
+            
             win_cnt[winner] += 1
         win_ratio = 1.0*(win_cnt[1] + 0.5*win_cnt[-1]) / n_games
         print("num_playouts:{}, win: {}, lose: {}, tie:{}".format(
@@ -164,6 +170,7 @@ class TrainPipeline():
 
     def run(self):
         """run the training pipeline"""
+        print("begin self-play.\n")
         try:
             for i in range(self.game_batch_num):
                 self.collect_selfplay_data(self.play_batch_size)
@@ -171,25 +178,31 @@ class TrainPipeline():
                         i+1, self.episode_len))
                 if len(self.data_buffer) > self.batch_size:
                     loss, entropy = self.policy_update()
+                    print("update the policy network. \n")
                 # check the performance of the current model,
                 # and save the model params
                 if (i+1) % self.check_freq == 0:
-                    print("current self-play batch: {}".format(i+1))
+                    print("current self-play batch: {}\n".format(i+1))
+                    self.policy_value_net.save_model('./model/current_policy_{}_{}_{}_iteration{}.model'\
+                        .format(self.board_height,self.board_width,self.n_in_row,self.last_iteration + i + 1))
                     win_ratio = self.policy_evaluate()
-                    self.policy_value_net.save_model('./current_policy.model')
                     if win_ratio > self.best_win_ratio:
-                        print("New best policy!!!!!!!!")
+                        print("Got an new best policy. \n")
                         self.best_win_ratio = win_ratio
                         # update the best_policy
-                        self.policy_value_net.save_model('./best_policy.model')
+                        self.policy_value_net.save_model('./model/best_policy_{}_{}_{}.model'\
+                            .format(self.board_height,self.board_width,self.n_in_row))
                         if (self.best_win_ratio == 1.0 and
-                                self.pure_mcts_playout_num < 5000):
-                            self.pure_mcts_playout_num += 1000
+                                self.pure_mcts_playout_num < 6000):
+                            self.pure_mcts_playout_num += 500 
                             self.best_win_ratio = 0.0
         except KeyboardInterrupt:
             print('\n\rquit')
 
 
 if __name__ == '__main__':
-    training_pipeline = TrainPipeline()
+    model_file = './model/best_policy_9_9_5.model'
+    last_iteration = 3200
+    training_pipeline = TrainPipeline(model_file,last_iteration)
+    #training_pipeline = TrainPipeline()
     training_pipeline.run()
