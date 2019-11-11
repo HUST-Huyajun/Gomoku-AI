@@ -52,10 +52,10 @@ def run():
     # model_file = 'best_policy_8_8_5.model'
     n = 5
     width, height = 9, 9
-    iteration = 500
+    iteration = 1000
 
-    #model_file = './model/current_policy_{}_{}_{}_iteration{}.model'.format(height,width,n,iteration)
-    model_file = './model/best_policy_{}_{}_{}.model'.format(height,width,n)
+    model_file = './model/current_policy_{}_{}_{}_iteration{}.model'.format(height,width,n,iteration)
+    #model_file = './model/best_policy_{}_{}_{}.model'.format(height,width,n)
     try:
         board = Board(width=width, height=height, n_in_row=n)
         game = Game(board)
@@ -64,7 +64,7 @@ def run():
         # load the trained policy_value_net in either Theano/Lasagne, PyTorch or TensorFlow
 
         best_policy = PolicyValueNet(width, height, model_file = model_file)
-        mcts_player = MCTSPlayer(best_policy.policy_value_fn, c_puct=5, n_playout=1000)
+        mcts_player = MCTSPlayer(best_policy.policy_value_fn, c_puct=5, n_playout=400)
 
         # load the provided model (trained in Theano/Lasagne) into a MCTS player written in pure numpy
         # try:
@@ -86,7 +86,7 @@ def run():
         # set start_player=0 for human first
         #game.start_play(human, mcts_player, start_player=1, is_shown=1)
         
-        mcts_player2 = MCTSPlayer(best_policy.policy_value_fn, c_puct=5, n_playout=1000)
+        mcts_player2 = MCTSPlayer(best_policy.policy_value_fn, c_puct=5, n_playout=400)
         game.start_play(mcts_player2, mcts_player, start_player=1, is_shown=1)
     except KeyboardInterrupt:
         print('\n\rquit')
